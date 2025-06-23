@@ -2,65 +2,65 @@ name: Go Build and Release
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:	
-    branches: [ "main" ]
+    branches: ["edit-validator"]
+  pull_request:
+    branches: ["edit-validator"]
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0  
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Set up Go
-      uses: actions/setup-go@v4
-      with:
-        go-version: '1.20'
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "1.20"
 
-    - name: Install dependencies
-      run: go mod tidy
+      - name: Install dependencies
+        run: go mod tidy
 
-    - name: Get version
-      id: get_version
-      run: |
-        VERSION=$(git describe --tags --always --dirty || echo "v0.0.0-$(git rev-parse --short HEAD)")
-        echo "VERSION=$VERSION" >> $GITHUB_ENV
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(git describe --tags --always --dirty || echo "v0.0.0-$(git rev-parse --short HEAD)")
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
-    - name: Build binary
-      run: |
-        go build -v -o cosmos-signer-${{ env.VERSION }} ./...
+      - name: Build binary
+        run: |
+          go build -v -o cosmos-signer-${{ env.VERSION }} ./...
 
-    - name: Upload binary as artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: cosmos-signer-${{ env.VERSION }}
-        path: cosmos-signer-${{ env.VERSION }}
-        retention-days: 7
+      - name: Upload binary as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cosmos-signer-${{ env.VERSION }}
+          path: cosmos-signer-${{ env.VERSION }}
+          retention-days: 7
 
-    - name: Create Release
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ env.VERSION }}
-        release_name: Release ${{ env.VERSION }}
-        draft: false
-        prerelease: false
+      - name: Create Release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/edit-validator'
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.VERSION }}
+          release_name: Release ${{ env.VERSION }}
+          draft: false
+          prerelease: true
 
-    - name: Upload Release Asset
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./cosmos-signer-${{ env.VERSION }}
-        asset_name: cosmos-signer-${{ env.VERSION }}
-        asset_content_type: application/octet-stream
+      - name: Upload Release Asset
+        if: github.event_name == 'push' && github.ref == 'refs/heads/edit-validator'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./cosmos-signer-${{ env.VERSION }}
+          asset_name: cosmos-signer-${{ env.VERSION }}
+          asset_content_type: application/octet-stream
 
-    - name: Test
-      run: go test -v ./...
+      - name: Test
+        run: go test -v ./...
