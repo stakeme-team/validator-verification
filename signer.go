@@ -32,8 +32,16 @@ type ValidatorKey struct {
 }
 
 type Message struct {
-	Address string `json:"address"`
-	NodeID  string `json:"nodeId"`
+	Address         string `json:"address"`
+	Moniker         string `json:"moniker"`
+	Details         string `json:"details"`
+	Banner          string `json:"banner"`
+	Avatar          string `json:"avatar"`
+	TwitterUrl      string `json:"twitterUrl"`
+	GithubUrl       string `json:"githubUrl"`
+	WebUrl          string `json:"webUrl"`
+	Identity        string `json:"identity"`
+	SecurityContact string `json:"securityContact"`
 }
 
 type SignResult struct {
@@ -50,7 +58,7 @@ func ripemd160Hash(data []byte) []byte {
 	return hasher.Sum(nil)
 }
 
-func pubkeyToAddress(pubkey []byte) (string, error) {
+func pubkeyToAddress(pubkey []byte, prefix string) (string, error) {
 	sha256Hash := sha256.Sum256(pubkey)
 	ripemd160Hash := ripemd160Hash(sha256Hash[:])
 
@@ -59,7 +67,7 @@ func pubkeyToAddress(pubkey []byte) (string, error) {
 		return "", fmt.Errorf("failed to convert bits for bech32: %v", err)
 	}
 
-	address, err := bech32.Encode("celestiavalcons", converted)
+	address, err := bech32.Encode(prefix, converted)
 	if err != nil {
 		return "", fmt.Errorf("failed to encode bech32 address: %v", err)
 	}
@@ -88,7 +96,6 @@ func loadPrivateKeyFromFile(filePath string) ([]byte, error) {
 	}
 
 	if len(privateKeyBytes) == 64 {
-		fmt.Fprintf(os.Stderr, "Debug: Using first 32 bytes of 64-byte key\n")
 		privateKeyBytes = privateKeyBytes[:32]
 	} else if len(privateKeyBytes) != 32 {
 		return nil, fmt.Errorf("private key must be 32 or 64 bytes (base64 decoded), got %d bytes", len(privateKeyBytes))
@@ -97,7 +104,7 @@ func loadPrivateKeyFromFile(filePath string) ([]byte, error) {
 	return privateKeyBytes, nil
 }
 
-func signMessageHex(message Message, privateKeyHex string) (*SignResult, error) {
+func signMessageHex(message Message, privateKeyHex string, prefix string) (*SignResult, error) {
 	if len(privateKeyHex) != 64 {
 		return nil, fmt.Errorf("private key must be a 64-character hex string")
 	}
@@ -111,7 +118,7 @@ func signMessageHex(message Message, privateKeyHex string) (*SignResult, error) 
 		return nil, fmt.Errorf("private key must be 32 bytes")
 	}
 
-	privateKey := ed25519.PrivateKey(privateKeyBytes)
+	privateKey := ed25519.NewKeyFromSeed(privateKeyBytes)
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
 	messageBytes, err := json.Marshal(message)
@@ -125,7 +132,7 @@ func signMessageHex(message Message, privateKeyHex string) (*SignResult, error) 
 		return nil, fmt.Errorf("signature verification failed")
 	}
 
-	address, err := pubkeyToAddress(publicKey)
+	address, err := pubkeyToAddress(publicKey, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate address: %v", err)
 	}
@@ -139,7 +146,7 @@ func signMessageHex(message Message, privateKeyHex string) (*SignResult, error) 
 	}, nil
 }
 
-func signMessageB64(message Message, privateKeyB64 string) (*SignResult, error) {
+func signMessageB64(message Message, privateKeyB64 string, prefix string) (*SignResult, error) {
 	privateKeyBytes, err := base64.StdEncoding.DecodeString(privateKeyB64)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode base64 private key: %v", err)
@@ -151,7 +158,7 @@ func signMessageB64(message Message, privateKeyB64 string) (*SignResult, error) 
 		return nil, fmt.Errorf("private key must be 32 or 64 bytes (base64 decoded), got %d bytes", len(privateKeyBytes))
 	}
 
-	privateKey := ed25519.PrivateKey(privateKeyBytes)
+	privateKey := ed25519.NewKeyFromSeed(privateKeyBytes)
 	publicKey := privateKey.Public().(ed25519.PublicKey)
 
 	messageBytes, err := json.Marshal(message)
@@ -165,7 +172,7 @@ func signMessageB64(message Message, privateKeyB64 string) (*SignResult, error) 
 		return nil, fmt.Errorf("signature verification failed")
 	}
 
-	address, err := pubkeyToAddress(publicKey)
+	address, err := pubkeyToAddress(publicKey, prefix)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate address: %v", err)
 	}
@@ -181,17 +188,18 @@ func signMessageB64(message Message, privateKeyB64 string) (*SignResult, error) 
 
 func main() {
 	if len(os.Args) < 4 {
-		fmt.Fprintf(os.Stderr, "Usage: %s <hex_key|file_path> <address> <node_id>\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Usage: %s <hex_key|file_path> <json_message> <prefix>\n", os.Args[0])
 		os.Exit(1)
 	}
 
 	keyInput := os.Args[1]
-	address := os.Args[2]
-	nodeID := os.Args[3]
+	jsonMessage := os.Args[2]
+	prefix := os.Args[3]
 
-	message := Message{
-		Address: address,
-		NodeID:  nodeID,
+	var message Message
+	if err := json.Unmarshal([]byte(jsonMessage), &message); err != nil {
+		fmt.Fprintf(os.Stderr, "Error parsing JSON message: %v\n", err)
+		os.Exit(1)
 	}
 
 	var result *SignResult
@@ -205,9 +213,9 @@ func main() {
 		}
 
 		privateKeyB64 := base64.StdEncoding.EncodeToString(privateKeyBytes)
-		result, err = signMessageB64(message, privateKeyB64)
+		result, err = signMessageB64(message, privateKeyB64, prefix)
 	} else {
-		result, err = signMessageHex(message, keyInput)
+		result, err = signMessageHex(message, keyInput, prefix)
 	}
 
 	if err != nil {
